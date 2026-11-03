@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Finance Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen">
+
+  <!-- Header: Running Balance -->
+  <header class="bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md">
+    <div class="max-w-3xl mx-auto px-4 py-8 sm:py-10">
+      <p class="text-sm uppercase tracking-wider text-indigo-100">Running Balance</p>
+      <p id="balance" class="text-4xl sm:text-5xl font-bold mt-1 tabular-nums">£0.00</p>
+    </div>
+  </header>
+
+  <main class="max-w-3xl mx-auto px-4 py-6 grid gap-6">
+
+    <!-- Transaction Entry Form -->
+    <section class="bg-white rounded-xl shadow-sm p-5">
+      <h2 class="text-lg font-semibold mb-4">Add Transaction</h2>
+      <form id="txForm" class="grid gap-4 sm:grid-cols-2" novalidate>
+        <div class="sm:col-span-2">
+          <label for="description" class="block text-sm font-medium text-slate-600 mb-1">Description</label>
+          <input id="description" type="text" required placeholder="e.g. Weekly groceries"
+            class="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        </div>
+
+        <div>
+          <label for="amount" class="block text-sm font-medium text-slate-600 mb-1">Amount (£)</label>
+          <input id="amount" type="number" required min="0.01" step="0.01" placeholder="0.00"
+            class="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        </div>
+
+        <div>
+          <label for="type" class="block text-sm font-medium text-slate-600 mb-1">Type</label>
+          <select id="type"
+            class="w-full rounded-lg border border-slate-300 px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <option value="income">Income</option>
+            <option value="expense" selected>Expense</option>
+          </select>
+        </div>
+
+        <div class="sm:col-span-2">
+          <label for="category" class="block text-sm font-medium text-slate-600 mb-1">Category</label>
+          <select id="category"
+            class="w-full rounded-lg border border-slate-300 px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <option>Food</option>
+            <option>Utilities</option>
+            <option>Salary</option>
+            <option>Entertainment</option>
+            <option>Transport</option>
+          </select>
+        </div>
+
+        <p id="formError" class="sm:col-span-2 text-sm text-rose-600 hidden"></p>
+
+        <div class="sm:col-span-2">
+          <button type="submit"
+            class="w-full sm:w-auto rounded-lg bg-indigo-600 px-5 py-2.5 font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+            Add Transaction
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Transaction List -->
+    <section class="bg-white rounded-xl shadow-sm p-5">
+      <h2 class="text-lg font-semibold mb-4">Transactions</h2>
+      <ul id="txList" class="divide-y divide-slate-100"></ul>
+      <p id="emptyState" class="text-sm text-slate-500 hidden">No transactions yet.</p>
+    </section>
+
+  </main>
+
+  <script>
+    // ---- State ----
+    const transactions = [
+      { id: 1, description: 'Monthly salary',     amount: 2400.00, type: 'income',  category: 'Salary' },
+      { id: 2, description: 'Supermarket shop',   amount: 64.35,   type: 'expense', category: 'Food' },
+      { id: 3, description: 'Electricity bill',   amount: 89.00,   type: 'expense', category: 'Utilities' },
+      { id: 4, description: 'Cinema tickets',     amount: 22.50,   type: 'expense', category: 'Entertainment' },
+      { id: 5, description: 'Train season top-up', amount: 45.00,  type: 'expense', category: 'Transport' },
+    ];
+
+    // Tailwind classes per category badge
+    const CATEGORY_STYLES = {
+      Food:          'bg-amber-100 text-amber-800',
+      Utilities:     'bg-sky-100 text-sky-800',
+      Salary:        'bg-emerald-100 text-emerald-800',
+      Entertainment: 'bg-fuchsia-100 text-fuchsia-800',
+      Transport:     'bg-orange-100 text-orange-800',
+    };
+
+    // ---- Helpers ----
+    const currency = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' });
+
+    function escapeHTML(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    // ---- Rendering ----
+    const balanceEl = document.getElementById('balance');
+    const listEl = document.getElementById('txList');
+    const emptyEl = document.getElementById('emptyState');
+
+    function renderBalance() {
+      const total = transactions.reduce(
+        (sum, t) => sum + (t.type === 'income' ? t.amount : -t.amount), 0
+      );
+      balanceEl.textContent = currency.format(total);
+      balanceEl.classList.toggle('text-rose-200', total < 0);
+    }
+
+    function renderList() {
+      emptyEl.classList.toggle('hidden', transactions.length > 0);
+
+      // Newest first
+      listEl.innerHTML = [...transactions].reverse().map(t => {
+        const isIncome = t.type === 'income';
+        const badge = CATEGORY_STYLES[t.category] || 'bg-slate-100 text-slate-700';
+        return `
+          <li class="flex items-center gap-3 py-3">
+            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-bold
+                         ${isIncome ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}"
+                  title="${isIncome ? 'Income' : 'Expense'}">
+              ${isIncome ? '+' : '−'}
+            </span>
+            <div class="min-w-0 flex-1">
+              <p class="font-medium truncate">${escapeHTML(t.description)}</p>
+              <span class="mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${badge}">
+                ${t.category}
+              </span>
+            </div>
+            <p class="shrink-0 font-semibold tabular-nums ${isIncome ? 'text-emerald-600' : 'text-rose-600'}">
+              ${isIncome ? '+' : '−'}${currency.format(t.amount)}
+            </p>
+          </li>`;
+      }).join('');
+    }
+
+    function render() {
+      renderBalance();
+      renderList();
+    }
+
+    // ---- Form handling ----
+    const form = document.getElementById('txForm');
+    const errorEl = document.getElementById('formError');
+
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      const description = form.description.value.trim();
+      const amount = parseFloat(form.amount.value);
+
+      if (!description) return showError('Please enter a description.');
+      if (!Number.isFinite(amount) || amount <= 0) return showError('Please enter an amount greater than 0.');
+
+      transactions.push({
+        id: Date.now(),
+        description,
+        amount: Math.round(amount * 100) / 100,
+        type: form.type.value,
+        category: form.category.value,
+      });
+
+      errorEl.classList.add('hidden');
+      form.description.value = '';
+      form.amount.value = '';
+      form.description.focus();
+      render();
+    });
+
+    function showError(msg) {
+      errorEl.textContent = msg;
+      errorEl.classList.remove('hidden');
+    }
+
+    render();
+  </script>
+</body>
+</html>
