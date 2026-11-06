@@ -2,174 +2,302 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
   <title>Finance Tracker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'] } } },
+    };
+  </script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <style>
-    dialog::backdrop { background: rgb(15 23 42 / 0.5); }
+    dialog::backdrop { background: rgb(15 23 42 / 0.55); backdrop-filter: blur(2px); }
+    /* Hide the native clear "x" on search inputs for a cleaner look */
+    input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; }
   </style>
 </head>
-<body class="bg-slate-100 text-slate-800 min-h-screen">
+<body class="min-h-screen bg-slate-100 font-sans text-slate-800 antialiased">
 
-  <!-- Header: Running Balance -->
-  <header class="bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md">
-    <div class="max-w-3xl mx-auto px-4 py-8 sm:py-10">
-      <p class="text-sm uppercase tracking-wider text-indigo-100">Running Balance</p>
-      <p id="balance" class="text-4xl sm:text-5xl font-bold mt-1 tabular-nums">£0.00</p>
+  <!-- ===== Sticky top bar: title + month navigation ===== -->
+  <nav class="sticky top-0 z-20 bg-slate-900/95 text-white backdrop-blur supports-[backdrop-filter]:bg-slate-900/80">
+    <div class="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-2.5">
+      <span class="hidden text-sm font-semibold tracking-tight text-slate-300 sm:block">Finance Tracker</span>
+
+      <div class="flex flex-1 items-center justify-between gap-1 sm:flex-none sm:justify-end">
+        <button id="prevMonth" type="button" aria-label="Previous month"
+          class="flex h-11 w-11 items-center justify-center rounded-full text-slate-300 transition hover:bg-white/10 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 active:scale-95">
+          <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M12.79 5.23a.75.75 0 0 1-.02 1.06L8.83 10l3.94 3.71a.75.75 0 1 1-1.04 1.08l-4.5-4.25a.75.75 0 0 1 0-1.08l4.5-4.25a.75.75 0 0 1 1.06.02Z" clip-rule="evenodd"/></svg>
+        </button>
+
+        <div class="flex min-w-[10rem] flex-col items-center">
+          <h1 id="monthLabel" class="text-base font-semibold tabular-nums sm:text-lg" aria-live="polite">—</h1>
+          <button id="todayBtn" type="button"
+            class="invisible -mt-0.5 rounded px-2 text-xs font-medium text-indigo-300 hover:text-indigo-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
+            Back to this month
+          </button>
+        </div>
+
+        <button id="nextMonth" type="button" aria-label="Next month"
+          class="flex h-11 w-11 items-center justify-center rounded-full text-slate-300 transition hover:bg-white/10 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 active:scale-95">
+          <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.17 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clip-rule="evenodd"/></svg>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ===== Hero: Running Balance for the month ===== -->
+  <header class="bg-gradient-to-b from-slate-900 to-slate-800 pb-16 text-white">
+    <div class="mx-auto max-w-5xl px-4 pt-6 sm:pt-8">
+      <p class="text-xs font-medium uppercase tracking-widest text-slate-400">Running Balance</p>
+      <p id="balance" class="mt-1 text-4xl font-bold tracking-tight tabular-nums sm:text-5xl">£0.00</p>
+      <p id="balanceSub" class="mt-2 text-sm text-slate-400"></p>
     </div>
   </header>
 
-  <main class="max-w-3xl mx-auto px-4 py-6 grid gap-6">
+  <main class="mx-auto -mt-10 grid max-w-5xl gap-4 px-4 pb-[calc(2rem+env(safe-area-inset-bottom))] sm:gap-6">
 
-    <!-- Transaction Entry / Edit Form -->
-    <section id="formSection" class="bg-white rounded-xl shadow-sm p-5 transition-shadow">
-      <div class="flex items-center justify-between mb-4">
-        <h2 id="formTitle" class="text-lg font-semibold">Add Transaction</h2>
-        <span id="editBadge" class="hidden rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">Editing</span>
-      </div>
-      <form id="txForm" class="grid gap-4 sm:grid-cols-2" novalidate>
-        <div class="sm:col-span-2">
-          <label for="description" class="block text-sm font-medium text-slate-600 mb-1">Description</label>
-          <input id="description" type="text" required placeholder="e.g. Weekly groceries"
-            class="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-        </div>
-
-        <div>
-          <label for="amount" class="block text-sm font-medium text-slate-600 mb-1">Amount (£)</label>
-          <input id="amount" type="number" required min="0.01" step="0.01" placeholder="0.00"
-            class="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-        </div>
-
-        <div>
-          <label for="type" class="block text-sm font-medium text-slate-600 mb-1">Type</label>
-          <select id="type"
-            class="w-full rounded-lg border border-slate-300 px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
-            <option value="income">Income</option>
-            <option value="expense" selected>Expense</option>
-          </select>
-        </div>
-
-        <div class="sm:col-span-2">
-          <label for="category" class="block text-sm font-medium text-slate-600 mb-1">Category</label>
-          <select id="category"
-            class="w-full rounded-lg border border-slate-300 px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
-            <option>Food</option>
-            <option>Utilities</option>
-            <option>Salary</option>
-            <option>Entertainment</option>
-            <option>Transport</option>
-          </select>
-        </div>
-
-        <p id="formError" class="sm:col-span-2 text-sm text-rose-600 hidden"></p>
-
-        <div class="sm:col-span-2 flex flex-col gap-2 sm:flex-row">
-          <button id="submitBtn" type="submit"
-            class="rounded-lg bg-indigo-600 px-5 py-2.5 font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
-            Add Transaction
-          </button>
-          <button id="cancelEditBtn" type="button"
-            class="hidden rounded-lg border border-slate-300 px-5 py-2.5 font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2">
-            Cancel
-          </button>
-        </div>
-      </form>
-    </section>
-
-    <!-- Summary: Stat Cards + Expense Chart -->
-    <section class="grid gap-4">
-      <h2 class="text-lg font-semibold">Summary</h2>
-
-      <div class="grid gap-4 sm:grid-cols-3">
-        <div class="rounded-xl bg-white shadow-sm p-5">
+    <!-- ===== Stat cards ===== -->
+    <section aria-label="Monthly summary" class="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+      <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:shadow-md">
+        <div class="flex items-center justify-between">
           <p class="text-sm font-medium text-slate-500">Total Income</p>
-          <p id="totalIncome" class="mt-1 text-2xl font-bold text-emerald-600 tabular-nums">£0.00</p>
+          <span class="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50 text-emerald-600" aria-hidden="true">
+            <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 17a.75.75 0 0 1-.75-.75V5.56L5.53 9.28a.75.75 0 0 1-1.06-1.06l5-5a.75.75 0 0 1 1.06 0l5 5a.75.75 0 1 1-1.06 1.06l-3.72-3.72v10.69A.75.75 0 0 1 10 17Z" clip-rule="evenodd"/></svg>
+          </span>
         </div>
-        <div class="rounded-xl bg-white shadow-sm p-5">
-          <p class="text-sm font-medium text-slate-500">Total Expenses</p>
-          <p id="totalExpenses" class="mt-1 text-2xl font-bold text-rose-600 tabular-nums">£0.00</p>
-        </div>
-        <div id="netCard" class="rounded-xl shadow-sm p-5 transition-colors bg-white">
-          <p id="netLabel" class="text-sm font-medium">Net Balance</p>
-          <p id="netBalance" class="mt-1 text-2xl font-bold tabular-nums">£0.00</p>
-        </div>
+        <p id="totalIncome" class="mt-2 text-2xl font-bold tracking-tight text-emerald-600 tabular-nums">£0.00</p>
       </div>
 
-      <div class="rounded-xl bg-white shadow-sm p-5">
-        <h3 class="text-base font-semibold mb-4">Spending by Category</h3>
-        <div class="relative mx-auto h-72 max-w-sm">
-          <canvas id="expenseChart" aria-label="Pie chart of expenses by category" role="img"></canvas>
-          <p id="chartEmpty" class="absolute inset-0 hidden items-center justify-center text-sm text-slate-500">
-            No expenses yet.
-          </p>
+      <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:shadow-md">
+        <div class="flex items-center justify-between">
+          <p class="text-sm font-medium text-slate-500">Total Expenses</p>
+          <span class="flex h-8 w-8 items-center justify-center rounded-full bg-rose-50 text-rose-600" aria-hidden="true">
+            <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a.75.75 0 0 1 .75.75v10.69l3.72-3.72a.75.75 0 1 1 1.06 1.06l-5 5a.75.75 0 0 1-1.06 0l-5-5a.75.75 0 1 1 1.06-1.06l3.72 3.72V3.75A.75.75 0 0 1 10 3Z" clip-rule="evenodd"/></svg>
+          </span>
         </div>
+        <p id="totalExpenses" class="mt-2 text-2xl font-bold tracking-tight text-rose-600 tabular-nums">£0.00</p>
+      </div>
+
+      <div id="netCard" class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:shadow-md">
+        <div class="flex items-center justify-between">
+          <p id="netLabel" class="text-sm font-medium text-slate-500">Net Balance</p>
+          <span id="netIcon" class="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500" aria-hidden="true">
+            <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a.75.75 0 0 1 .75.75v.75h3.5a.75.75 0 0 1 0 1.5h-.4l2.03 5.08a.75.75 0 0 1-.13.77A3.5 3.5 0 0 1 13 12a3.5 3.5 0 0 1-2.75-1.15.75.75 0 0 1-.13-.77L12.15 5h-1.4v11h3.5a.75.75 0 0 1 0 1.5h-8.5a.75.75 0 0 1 0-1.5h3.5V5h-1.4l2.03 5.08a.75.75 0 0 1-.13.77A3.5 3.5 0 0 1 7 12a3.5 3.5 0 0 1-2.75-1.15.75.75 0 0 1-.13-.77L6.15 5h-.4a.75.75 0 0 1 0-1.5h3.5v-.75A.75.75 0 0 1 10 2Z"/></svg>
+          </span>
+        </div>
+        <p id="netBalance" class="mt-2 text-2xl font-bold tracking-tight tabular-nums">£0.00</p>
       </div>
     </section>
 
-    <!-- Transaction List -->
-    <section class="bg-white rounded-xl shadow-sm p-5">
-      <h2 class="text-lg font-semibold mb-4">Transactions</h2>
+    <!-- ===== Form + Chart (side by side on large screens, stacked on mobile) ===== -->
+    <div class="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-5">
+
+      <!-- Transaction Entry / Edit Form -->
+      <section id="formSection" class="scroll-mt-20 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 transition sm:p-6 lg:col-span-2">
+        <div class="mb-5 flex items-center justify-between">
+          <h2 id="formTitle" class="text-lg font-semibold tracking-tight">Add Transaction</h2>
+          <span id="editBadge" class="hidden rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800">Editing</span>
+        </div>
+
+        <form id="txForm" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2" novalidate>
+          <div class="sm:col-span-2 lg:col-span-1 xl:col-span-2">
+            <label for="description" class="mb-1.5 block text-sm font-medium text-slate-600">Description</label>
+            <input id="description" type="text" required placeholder="e.g. Weekly groceries" autocomplete="off"
+              class="h-11 w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 text-base transition placeholder:text-slate-400 hover:border-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 sm:text-sm" />
+          </div>
+
+          <div>
+            <label for="amount" class="mb-1.5 block text-sm font-medium text-slate-600">Amount (£)</label>
+            <input id="amount" type="number" inputmode="decimal" required min="0.01" step="0.01" placeholder="0.00"
+              class="h-11 w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 text-base tabular-nums transition placeholder:text-slate-400 hover:border-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 sm:text-sm" />
+          </div>
+
+          <div>
+            <label for="date" class="mb-1.5 block text-sm font-medium text-slate-600">Date</label>
+            <input id="date" type="date" required
+              class="h-11 w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 text-base transition hover:border-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 sm:text-sm" />
+          </div>
+
+          <div>
+            <label for="type" class="mb-1.5 block text-sm font-medium text-slate-600">Type</label>
+            <select id="type"
+              class="h-11 w-full rounded-xl border border-slate-300 bg-slate-50 px-3 text-base transition hover:border-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 sm:text-sm">
+              <option value="income">Income</option>
+              <option value="expense" selected>Expense</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="category" class="mb-1.5 block text-sm font-medium text-slate-600">Category</label>
+            <select id="category"
+              class="h-11 w-full rounded-xl border border-slate-300 bg-slate-50 px-3 text-base transition hover:border-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 sm:text-sm">
+              <option>Food</option>
+              <option>Utilities</option>
+              <option>Salary</option>
+              <option>Entertainment</option>
+              <option>Transport</option>
+            </select>
+          </div>
+
+          <p id="formError" role="alert" class="hidden text-sm font-medium text-rose-600 sm:col-span-2 lg:col-span-1 xl:col-span-2"></p>
+
+          <div class="flex flex-col gap-2 sm:col-span-2 sm:flex-row lg:col-span-1 lg:flex-col xl:col-span-2 xl:flex-row">
+            <button id="submitBtn" type="submit"
+              class="h-11 flex-1 rounded-xl bg-indigo-600 px-5 font-semibold text-white shadow-sm transition hover:bg-indigo-500 hover:shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 active:scale-[0.98]">
+              Add Transaction
+            </button>
+            <button id="cancelEditBtn" type="button"
+              class="hidden h-11 rounded-xl border border-slate-300 bg-white px-5 font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 active:scale-[0.98]">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Spending by Category -->
+      <section class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-6 lg:col-span-3">
+        <div class="mb-4 flex items-baseline justify-between gap-2">
+          <h2 class="text-lg font-semibold tracking-tight">Spending by Category</h2>
+          <span id="chartMonth" class="text-sm text-slate-500"></span>
+        </div>
+        <div class="relative mx-auto h-72 max-w-md sm:h-80">
+          <canvas id="expenseChart" aria-label="Pie chart of expenses by category for the selected month" role="img"></canvas>
+          <div id="chartEmpty" class="absolute inset-0 hidden flex-col items-center justify-center gap-2 text-center">
+            <span class="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400" aria-hidden="true">
+              <svg class="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path d="M12 9a1 1 0 0 1-1-1V3c0-.55.45-1.01.99-.9a7 7 0 0 1 5.91 5.91c.1.54-.36.99-.9.99h-5Z"/><path d="M8.9 4.1c.55-.1 1.1.34 1.1.9v5c0 .55.45 1 1 1h5c.56 0 1 .55.9 1.1A7 7 0 1 1 8.9 4.1Z"/></svg>
+            </span>
+            <p class="text-sm text-slate-500">No expenses this month.</p>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ===== Transaction List ===== -->
+    <section class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-6">
+      <div class="mb-4 flex items-baseline justify-between gap-2">
+        <h2 class="text-lg font-semibold tracking-tight">Transactions</h2>
+        <span id="txCount" class="text-sm text-slate-500"></span>
+      </div>
 
       <!-- Search + Filters -->
-      <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+      <div class="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center">
         <div class="relative flex-1">
-          <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+          <svg class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
             <path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 3.47 9.77l3.63 3.63a.75.75 0 1 0 1.06-1.06l-3.63-3.63A5.5 5.5 0 0 0 9 3.5ZM5 9a4 4 0 1 1 8 0 4 4 0 0 1-8 0Z" clip-rule="evenodd" />
           </svg>
-          <input id="search" type="search" placeholder="Search description or category…" aria-label="Search transactions"
-            class="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          <input id="search" type="search" placeholder="Search description or category…" aria-label="Search transactions" autocomplete="off"
+            class="h-11 w-full rounded-xl border border-slate-300 bg-slate-50 pl-10 pr-3.5 text-base transition placeholder:text-slate-400 hover:border-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 sm:text-sm" />
         </div>
-        <div id="filterGroup" class="inline-flex rounded-lg bg-slate-100 p-1" role="group" aria-label="Filter by type">
-          <button type="button" data-filter="all"     class="filter-btn rounded-md px-3 py-1.5 text-sm font-medium">All</button>
-          <button type="button" data-filter="income"  class="filter-btn rounded-md px-3 py-1.5 text-sm font-medium">Income</button>
-          <button type="button" data-filter="expense" class="filter-btn rounded-md px-3 py-1.5 text-sm font-medium">Expenses</button>
+        <div id="filterGroup" class="grid grid-cols-3 rounded-xl bg-slate-100 p-1 sm:inline-grid" role="group" aria-label="Filter by type">
+          <button type="button" data-filter="all"     class="filter-btn h-9 rounded-lg px-4 text-sm font-medium transition">All</button>
+          <button type="button" data-filter="income"  class="filter-btn h-9 rounded-lg px-4 text-sm font-medium transition">Income</button>
+          <button type="button" data-filter="expense" class="filter-btn h-9 rounded-lg px-4 text-sm font-medium transition">Expenses</button>
         </div>
       </div>
 
-      <ul id="txList" class="divide-y divide-slate-100"></ul>
-      <p id="emptyState" class="py-6 text-center text-sm text-slate-500 hidden"></p>
+      <ul id="txList" class="-mx-2 divide-y divide-slate-100"></ul>
+      <div id="emptyState" class="hidden py-10 text-center">
+        <p id="emptyText" class="text-sm text-slate-500"></p>
+      </div>
     </section>
 
   </main>
 
-  <!-- Delete Confirmation Dialog -->
-  <dialog id="confirmDialog" class="w-[calc(100%-2rem)] max-w-sm rounded-xl p-0 shadow-xl">
-    <form method="dialog" class="p-5">
-      <h3 class="text-lg font-semibold text-slate-800">Delete transaction?</h3>
-      <p id="confirmText" class="mt-2 text-sm text-slate-600"></p>
-      <div class="mt-5 flex justify-end gap-2">
-        <button value="cancel" class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Cancel</button>
-        <button value="confirm" class="rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700">Delete</button>
+  <!-- ===== Delete Confirmation Dialog ===== -->
+  <dialog id="confirmDialog" class="w-[calc(100%-2rem)] max-w-sm rounded-2xl p-0 shadow-2xl ring-1 ring-slate-200">
+    <form method="dialog" class="p-6">
+      <div class="flex items-start gap-4">
+        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600" aria-hidden="true">
+          <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.44c-.8.08-1.58.18-2.36.3a.75.75 0 1 0 .22 1.49l.15-.02.87 10.88A2.75 2.75 0 0 0 7.62 19h4.76a2.75 2.75 0 0 0 2.74-2.16l.87-10.88.15.02a.75.75 0 0 0 .22-1.49c-.78-.12-1.56-.22-2.36-.3v-.44A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.67.03 2.5.08v-.33c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.33C8.33 4.03 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z" clip-rule="evenodd"/></svg>
+        </span>
+        <div>
+          <h3 class="text-lg font-semibold tracking-tight text-slate-900">Delete transaction?</h3>
+          <p id="confirmText" class="mt-1 text-sm text-slate-600"></p>
+        </div>
+      </div>
+      <div class="mt-6 grid grid-cols-2 gap-2 sm:flex sm:justify-end">
+        <button value="cancel" class="h-11 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 active:scale-[0.98]">Cancel</button>
+        <button value="confirm" class="h-11 rounded-xl bg-rose-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-500 active:scale-[0.98]">Delete</button>
       </div>
     </form>
   </dialog>
 
   <script>
-    // ---- State ----
+    // =========================================================
+    // Date helpers (local time, stored as 'YYYY-MM-DD' strings)
+    // =========================================================
+    const pad = n => String(n).padStart(2, '0');
+    const toISODate = (y, m, d) => `${y}-${pad(m + 1)}-${pad(d)}`;          // m is 0-based
+    const monthKey = (y, m) => `${y}-${pad(m + 1)}`;
+    const daysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
+
+    const today = new Date();
+    const TODAY = { y: today.getFullYear(), m: today.getMonth(), d: today.getDate() };
+
+    // Offset a {y, m} by n months
+    function shiftMonth({ y, m }, n) {
+      const d = new Date(y, m + n, 1);
+      return { y: d.getFullYear(), m: d.getMonth() };
+    }
+
+    // Build a sample date `offset` months from now on day `day` (clamped to month length)
+    function sampleDate(offset, day) {
+      const { y, m } = shiftMonth(TODAY, offset);
+      return toISODate(y, m, Math.min(day, daysInMonth(y, m)));
+    }
+
+    const monthFmt = new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric' });
+    const dayFmt   = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' });
+    const parseISO = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+
+    // =========================================================
+    // State
+    // =========================================================
+    // Sample data spans this month and the previous two, so navigation shows real data
     let transactions = [
-      { id: 1, description: 'Monthly salary',      amount: 2400.00, type: 'income',  category: 'Salary' },
-      { id: 2, description: 'Supermarket shop',    amount: 64.35,   type: 'expense', category: 'Food' },
-      { id: 3, description: 'Electricity bill',    amount: 89.00,   type: 'expense', category: 'Utilities' },
-      { id: 4, description: 'Cinema tickets',      amount: 22.50,   type: 'expense', category: 'Entertainment' },
-      { id: 5, description: 'Train season top-up', amount: 45.00,   type: 'expense', category: 'Transport' },
+      // This month
+      { id: 1,  date: sampleDate(0, 1),  description: 'Monthly salary',      amount: 2400.00, type: 'income',  category: 'Salary' },
+      { id: 2,  date: sampleDate(0, 2),  description: 'Supermarket shop',    amount: 64.35,   type: 'expense', category: 'Food' },
+      { id: 3,  date: sampleDate(0, 3),  description: 'Electricity bill',    amount: 89.00,   type: 'expense', category: 'Utilities' },
+      { id: 4,  date: sampleDate(0, 3),  description: 'Cinema tickets',      amount: 22.50,   type: 'expense', category: 'Entertainment' },
+      { id: 5,  date: sampleDate(0, 1),  description: 'Train season top-up', amount: 45.00,   type: 'expense', category: 'Transport' },
+      // Last month
+      { id: 6,  date: sampleDate(-1, 1), description: 'Monthly salary',      amount: 2400.00, type: 'income',  category: 'Salary' },
+      { id: 7,  date: sampleDate(-1, 6), description: 'Groceries',           amount: 82.10,   type: 'expense', category: 'Food' },
+      { id: 8,  date: sampleDate(-1, 12),description: 'Broadband',           amount: 32.00,   type: 'expense', category: 'Utilities' },
+      { id: 9,  date: sampleDate(-1, 18),description: 'Concert tickets',     amount: 68.00,   type: 'expense', category: 'Entertainment' },
+      { id: 10, date: sampleDate(-1, 22),description: 'Fuel',                amount: 54.20,   type: 'expense', category: 'Transport' },
+      { id: 11, date: sampleDate(-1, 27),description: 'Restaurant dinner',   amount: 41.75,   type: 'expense', category: 'Food' },
+      // Two months ago (overspent month, shows the red Net Balance state)
+      { id: 12, date: sampleDate(-2, 1), description: 'Part-time pay',       amount: 650.00,  type: 'income',  category: 'Salary' },
+      { id: 13, date: sampleDate(-2, 3), description: 'Rent share',          amount: 550.00,  type: 'expense', category: 'Utilities' },
+      { id: 14, date: sampleDate(-2, 9), description: 'Groceries',           amount: 95.40,   type: 'expense', category: 'Food' },
+      { id: 15, date: sampleDate(-2, 15),description: 'Bus pass',            amount: 60.00,   type: 'expense', category: 'Transport' },
     ];
 
+    let selected = { y: TODAY.y, m: TODAY.m }; // currently viewed month
     let searchQuery = '';
     let activeFilter = 'all';   // 'all' | 'income' | 'expense'
-    let editingId = null;       // id of transaction being edited, or null
+    let editingId = null;
     let pendingDeleteId = null;
 
     // One source of truth per category: badge classes + chart colour
     const CATEGORIES = {
-      Food:          { badge: 'bg-amber-100 text-amber-800',     color: '#f59e0b' },
-      Utilities:     { badge: 'bg-sky-100 text-sky-800',         color: '#0ea5e9' },
-      Salary:        { badge: 'bg-emerald-100 text-emerald-800', color: '#10b981' },
-      Entertainment: { badge: 'bg-fuchsia-100 text-fuchsia-800', color: '#d946ef' },
-      Transport:     { badge: 'bg-indigo-100 text-indigo-800',   color: '#6366f1' },
+      Food:          { badge: 'bg-amber-50 text-amber-700 ring-amber-200',       color: '#f59e0b' },
+      Utilities:     { badge: 'bg-sky-50 text-sky-700 ring-sky-200',             color: '#0ea5e9' },
+      Salary:        { badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200', color: '#10b981' },
+      Entertainment: { badge: 'bg-fuchsia-50 text-fuchsia-700 ring-fuchsia-200', color: '#d946ef' },
+      Transport:     { badge: 'bg-indigo-50 text-indigo-700 ring-indigo-200',    color: '#6366f1' },
     };
 
-    // ---- Helpers ----
+    // =========================================================
+    // Derived data
+    // =========================================================
     const currency = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' });
 
     function escapeHTML(str) {
@@ -178,94 +306,116 @@
       return div.innerHTML;
     }
 
-    function findTx(id) {
-      return transactions.find(t => t.id === id);
+    const findTx = id => transactions.find(t => t.id === id);
+    const isCurrentMonth = () => selected.y === TODAY.y && selected.m === TODAY.m;
+
+    // Everything (balance, cards, chart, list) is scoped to this
+    function getMonthTransactions() {
+      const key = monthKey(selected.y, selected.m);
+      return transactions.filter(t => t.date.startsWith(key));
     }
 
-    function getTotals() {
+    function getTotals(list) {
       let income = 0, expenses = 0;
-      for (const t of transactions) {
+      for (const t of list) {
         if (t.type === 'income') income += t.amount;
         else expenses += t.amount;
       }
       return { income, expenses, net: income - expenses };
     }
 
-    function getExpensesByCategory() {
+    function getExpensesByCategory(list) {
       const totals = {};
-      for (const t of transactions) {
+      for (const t of list) {
         if (t.type !== 'expense') continue;
         totals[t.category] = (totals[t.category] || 0) + t.amount;
       }
       return totals;
     }
 
-    // Search and type filter combine: an item must pass both
-    function getVisibleTransactions() {
+    // Search + type filter combine: an item must pass both
+    function getVisibleTransactions(list) {
       const q = searchQuery.trim().toLowerCase();
-      return transactions.filter(t => {
-        const matchesType = activeFilter === 'all' || t.type === activeFilter;
-        const matchesSearch = !q ||
-          t.description.toLowerCase().includes(q) ||
-          t.category.toLowerCase().includes(q);
-        return matchesType && matchesSearch;
-      });
+      return list
+        .filter(t => {
+          const matchesType = activeFilter === 'all' || t.type === activeFilter;
+          const matchesSearch = !q ||
+            t.description.toLowerCase().includes(q) ||
+            t.category.toLowerCase().includes(q);
+          return matchesType && matchesSearch;
+        })
+        .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id); // newest first
     }
 
-    // ---- Rendering: header + summary ----
-    const balanceEl = document.getElementById('balance');
+    // =========================================================
+    // Rendering
+    // =========================================================
+    const $ = id => document.getElementById(id);
 
-    function renderBalance({ net }) {
-      balanceEl.textContent = currency.format(net);
-      balanceEl.classList.toggle('text-rose-200', net < 0);
+    function renderMonthNav() {
+      const label = monthFmt.format(new Date(selected.y, selected.m, 1));
+      $('monthLabel').textContent = label;
+      $('chartMonth').textContent = label;
+      $('todayBtn').classList.toggle('invisible', isCurrentMonth());
     }
 
-    const netCard = document.getElementById('netCard');
-    const netLabel = document.getElementById('netLabel');
-    const netValue = document.getElementById('netBalance');
+    function renderBalance({ income, expenses, net }, count) {
+      $('balance').textContent = currency.format(net);
+      $('balance').classList.toggle('text-rose-300', net < 0);
+      $('balanceSub').textContent = count === 0
+        ? 'No transactions this month'
+        : `${currency.format(income)} in · ${currency.format(expenses)} out`;
+    }
 
     const NET_STYLES = {
-      positive: { card: ['bg-emerald-50', 'ring-1', 'ring-emerald-200'], label: 'text-emerald-700', value: 'text-emerald-700' },
-      negative: { card: ['bg-rose-50', 'ring-1', 'ring-rose-200'],       label: 'text-rose-700',    value: 'text-rose-700' },
-      zero:     { card: ['bg-white'],                                    label: 'text-slate-500',   value: 'text-slate-800' },
+      positive: { card: ['bg-emerald-50', 'ring-emerald-200'], text: 'text-emerald-700', icon: ['bg-emerald-100', 'text-emerald-600'] },
+      negative: { card: ['bg-rose-50', 'ring-rose-200'],       text: 'text-rose-700',    icon: ['bg-rose-100', 'text-rose-600'] },
+      zero:     { card: ['bg-white', 'ring-slate-200'],        text: 'text-slate-800',   icon: ['bg-slate-100', 'text-slate-500'] },
     };
-    const ALL_NET_CLASSES = {
-      card:  [...new Set(Object.values(NET_STYLES).flatMap(s => s.card))],
-      label: Object.values(NET_STYLES).map(s => s.label),
-      value: Object.values(NET_STYLES).map(s => s.value),
+    const ALL_NET = {
+      card: [...new Set(Object.values(NET_STYLES).flatMap(s => s.card))],
+      text: Object.values(NET_STYLES).map(s => s.text),
+      icon: [...new Set(Object.values(NET_STYLES).flatMap(s => s.icon))],
     };
 
     function renderSummary({ income, expenses, net }) {
-      document.getElementById('totalIncome').textContent = currency.format(income);
-      document.getElementById('totalExpenses').textContent = currency.format(expenses);
-      netValue.textContent = currency.format(net);
+      $('totalIncome').textContent = currency.format(income);
+      $('totalExpenses').textContent = currency.format(expenses);
+      $('netBalance').textContent = currency.format(net);
 
-      const state = net > 0 ? 'positive' : net < 0 ? 'negative' : 'zero';
-      const s = NET_STYLES[state];
-      netCard.classList.remove(...ALL_NET_CLASSES.card);
-      netCard.classList.add(...s.card);
-      netLabel.classList.remove(...ALL_NET_CLASSES.label);
-      netLabel.classList.add(s.label);
-      netValue.classList.remove(...ALL_NET_CLASSES.value);
-      netValue.classList.add(s.value);
+      const s = NET_STYLES[net > 0 ? 'positive' : net < 0 ? 'negative' : 'zero'];
+      const card = $('netCard'), label = $('netLabel'), value = $('netBalance'), icon = $('netIcon');
+      card.classList.remove(...ALL_NET.card);   card.classList.add(...s.card);
+      value.classList.remove(...ALL_NET.text);  value.classList.add(s.text);
+      label.classList.remove('text-slate-500', ...ALL_NET.text);
+      label.classList.add(s.text === 'text-slate-800' ? 'text-slate-500' : s.text);
+      icon.classList.remove(...ALL_NET.icon);   icon.classList.add(...s.icon);
     }
 
-    // ---- Rendering: chart ----
-    const chartEmptyEl = document.getElementById('chartEmpty');
-    const expenseChart = new Chart(document.getElementById('expenseChart'), {
+    // Chart
+    const expenseChart = new Chart($('expenseChart'), {
       type: 'pie',
-      data: { labels: [], datasets: [{ data: [], backgroundColor: [], borderColor: '#ffffff', borderWidth: 2 }] },
+      data: { labels: [], datasets: [{ data: [], backgroundColor: [], borderColor: '#ffffff', borderWidth: 3, hoverOffset: 8 }] },
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        layout: { padding: 8 },
         plugins: {
-          legend: { position: 'bottom', labels: { usePointStyle: true, padding: 16 } },
+          legend: {
+            position: 'bottom',
+            labels: { usePointStyle: true, pointStyle: 'circle', padding: 18, color: '#475569', font: { family: 'Inter', size: 13 } },
+          },
           tooltip: {
+            backgroundColor: '#0f172a',
+            padding: 10,
+            cornerRadius: 8,
+            titleFont: { family: 'Inter' },
+            bodyFont: { family: 'Inter' },
             callbacks: {
               label(ctx) {
                 const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
                 const pct = total ? ((ctx.parsed / total) * 100).toFixed(1) : 0;
-                return ` ${ctx.label}: ${currency.format(ctx.parsed)} (${pct}%)`;
+                return ` ${currency.format(ctx.parsed)} (${pct}%)`;
               },
             },
           },
@@ -273,8 +423,8 @@
       },
     });
 
-    function renderChart() {
-      const byCategory = getExpensesByCategory();
+    function renderChart(list) {
+      const byCategory = getExpensesByCategory(list);
       const labels = Object.keys(CATEGORIES).filter(c => byCategory[c] > 0);
       const ds = expenseChart.data.datasets[0];
 
@@ -284,13 +434,11 @@
       expenseChart.update();
 
       const empty = labels.length === 0;
-      chartEmptyEl.classList.toggle('hidden', !empty);
-      chartEmptyEl.classList.toggle('flex', empty);
+      $('expenseChart').classList.toggle('invisible', empty);
+      $('chartEmpty').classList.toggle('hidden', !empty);
+      $('chartEmpty').classList.toggle('flex', empty);
     }
 
-    // ---- Rendering: filters + list ----
-    const listEl = document.getElementById('txList');
-    const emptyEl = document.getElementById('emptyState');
     const filterBtns = document.querySelectorAll('.filter-btn');
 
     function renderFilters() {
@@ -299,110 +447,142 @@
         btn.setAttribute('aria-pressed', active);
         btn.classList.toggle('bg-white', active);
         btn.classList.toggle('shadow-sm', active);
-        btn.classList.toggle('text-indigo-700', active);
-        btn.classList.toggle('text-slate-600', !active);
-        btn.classList.toggle('hover:text-slate-900', !active);
+        btn.classList.toggle('text-slate-900', active);
+        btn.classList.toggle('text-slate-500', !active);
+        btn.classList.toggle('hover:text-slate-800', !active);
       });
     }
 
-    function renderList() {
-      const visible = getVisibleTransactions();
+    function renderList(monthList) {
+      const visible = getVisibleTransactions(monthList);
+      const listEl = $('txList');
+
+      $('txCount').textContent = monthList.length
+        ? (visible.length === monthList.length ? `${monthList.length} total` : `${visible.length} of ${monthList.length}`)
+        : '';
 
       if (visible.length === 0) {
-        emptyEl.textContent = transactions.length === 0
-          ? 'No transactions yet.'
+        $('emptyText').textContent = monthList.length === 0
+          ? 'No transactions this month. Add one above to get started.'
           : 'No transactions match your search or filter.';
-        emptyEl.classList.remove('hidden');
+        $('emptyState').classList.remove('hidden');
       } else {
-        emptyEl.classList.add('hidden');
+        $('emptyState').classList.add('hidden');
       }
 
-      // Newest first
-      listEl.innerHTML = [...visible].reverse().map(t => {
+      listEl.innerHTML = visible.map(t => {
         const isIncome = t.type === 'income';
         const isEditing = t.id === editingId;
-        const badge = CATEGORIES[t.category]?.badge || 'bg-slate-100 text-slate-700';
+        const badge = CATEGORIES[t.category]?.badge || 'bg-slate-50 text-slate-700 ring-slate-200';
         return `
-          <li class="flex flex-wrap items-center gap-3 py-3 ${isEditing ? '-mx-2 rounded-lg bg-amber-50 px-2' : ''}">
-            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-bold
-                         ${isIncome ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}"
-                  title="${isIncome ? 'Income' : 'Expense'}">
+          <li class="group flex items-center gap-3 rounded-xl px-2 py-3 transition hover:bg-slate-50 ${isEditing ? 'bg-amber-50 ring-1 ring-amber-200 hover:bg-amber-50' : ''}">
+            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg font-bold
+                         ${isIncome ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}"
+                  title="${isIncome ? 'Income' : 'Expense'}" aria-label="${isIncome ? 'Income' : 'Expense'}">
               ${isIncome ? '+' : '−'}
             </span>
+
             <div class="min-w-0 flex-1">
-              <p class="font-medium truncate">${escapeHTML(t.description)}</p>
-              <span class="mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${badge}">
-                ${t.category}
-              </span>
-            </div>
-            <p class="shrink-0 font-semibold tabular-nums ${isIncome ? 'text-emerald-600' : 'text-rose-600'}">
-              ${isIncome ? '+' : '−'}${currency.format(t.amount)}
-            </p>
-            <div class="flex shrink-0 gap-1 w-full justify-end sm:w-auto">
-              <button type="button" data-action="edit" data-id="${t.id}"
-                class="rounded-md px-2.5 py-1 text-sm font-medium text-indigo-600 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                Edit
-              </button>
-              <button type="button" data-action="delete" data-id="${t.id}"
-                class="rounded-md px-2.5 py-1 text-sm font-medium text-rose-600 hover:bg-rose-50 focus:outline-none focus:ring-2 focus:ring-rose-500">
-                Delete
-              </button>
+              <div class="flex items-start justify-between gap-3">
+                <p class="truncate font-medium text-slate-900">${escapeHTML(t.description)}</p>
+                <p class="shrink-0 font-semibold tabular-nums ${isIncome ? 'text-emerald-600' : 'text-rose-600'}">
+                  ${isIncome ? '+' : '−'}${currency.format(t.amount)}
+                </p>
+              </div>
+              <div class="mt-1 flex items-center justify-between gap-2">
+                <div class="flex min-w-0 items-center gap-2">
+                  <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${badge}">${t.category}</span>
+                  <span class="truncate text-xs text-slate-500">${dayFmt.format(parseISO(t.date))}</span>
+                </div>
+                <div class="flex shrink-0 gap-1 sm:opacity-60 sm:transition sm:group-hover:opacity-100 sm:focus-within:opacity-100">
+                  <button type="button" data-action="edit" data-id="${t.id}" aria-label="Edit ${escapeHTML(t.description)}"
+                    class="flex h-10 min-w-[2.75rem] items-center justify-center rounded-lg px-2.5 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 active:scale-95">
+                    Edit
+                  </button>
+                  <button type="button" data-action="delete" data-id="${t.id}" aria-label="Delete ${escapeHTML(t.description)}"
+                    class="flex h-10 min-w-[2.75rem] items-center justify-center rounded-lg px-2.5 text-sm font-medium text-rose-600 transition hover:bg-rose-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 active:scale-95">
+                    Delete
+                  </button>
+                </div>
+              </div>
             </div>
           </li>`;
       }).join('');
     }
 
-    // Single entry point: every UI piece refreshes from the same data
+    // Single entry point: every UI piece refreshes from the selected month's data
     function render() {
-      const totals = getTotals();
-      renderBalance(totals);
+      const monthList = getMonthTransactions();
+      const totals = getTotals(monthList);
+      renderMonthNav();
+      renderBalance(totals, monthList.length);
       renderSummary(totals);
-      renderChart();
+      renderChart(monthList);
       renderFilters();
-      renderList();
+      renderList(monthList);
     }
 
-    // ---- Search + filter events ----
-    document.getElementById('search').addEventListener('input', e => {
+    // =========================================================
+    // Events: month navigation
+    // =========================================================
+    // Default date for new entries: today if viewing this month, otherwise the 1st of the viewed month
+    function defaultDateForSelected() {
+      return isCurrentMonth()
+        ? toISODate(TODAY.y, TODAY.m, TODAY.d)
+        : toISODate(selected.y, selected.m, 1);
+    }
+
+    function goToMonth(next) {
+      selected = next;
+      if (editingId === null) $('date').value = defaultDateForSelected();
+      render();
+    }
+
+    $('prevMonth').addEventListener('click', () => goToMonth(shiftMonth(selected, -1)));
+    $('nextMonth').addEventListener('click', () => goToMonth(shiftMonth(selected, 1)));
+    $('todayBtn').addEventListener('click', () => goToMonth({ y: TODAY.y, m: TODAY.m }));
+
+    // =========================================================
+    // Events: search + filter
+    // =========================================================
+    $('search').addEventListener('input', e => {
       searchQuery = e.target.value;
-      renderList();
+      renderList(getMonthTransactions());
     });
 
     filterBtns.forEach(btn => btn.addEventListener('click', () => {
       activeFilter = btn.dataset.filter;
       renderFilters();
-      renderList();
+      renderList(getMonthTransactions());
     }));
 
-    // ---- Form: add + edit ----
-    const form = document.getElementById('txForm');
-    const formSection = document.getElementById('formSection');
-    const formTitle = document.getElementById('formTitle');
-    const editBadge = document.getElementById('editBadge');
-    const submitBtn = document.getElementById('submitBtn');
-    const cancelEditBtn = document.getElementById('cancelEditBtn');
-    const errorEl = document.getElementById('formError');
+    // =========================================================
+    // Form: add + edit
+    // =========================================================
+    const form = $('txForm');
 
     function showError(msg) {
-      errorEl.textContent = msg;
-      errorEl.classList.remove('hidden');
+      $('formError').textContent = msg;
+      $('formError').classList.remove('hidden');
     }
 
     function resetForm() {
       form.description.value = '';
       form.amount.value = '';
-      errorEl.classList.add('hidden');
+      form.date.value = defaultDateForSelected();
+      $('formError').classList.add('hidden');
     }
 
     function setEditMode(id) {
       editingId = id;
       const editing = id !== null;
-      formTitle.textContent = editing ? 'Edit Transaction' : 'Add Transaction';
-      submitBtn.textContent = editing ? 'Update Transaction' : 'Add Transaction';
-      editBadge.classList.toggle('hidden', !editing);
-      cancelEditBtn.classList.toggle('hidden', !editing);
-      formSection.classList.toggle('ring-2', editing);
-      formSection.classList.toggle('ring-amber-300', editing);
+      $('formTitle').textContent = editing ? 'Edit Transaction' : 'Add Transaction';
+      $('submitBtn').textContent = editing ? 'Update Transaction' : 'Add Transaction';
+      $('editBadge').classList.toggle('hidden', !editing);
+      $('cancelEditBtn').classList.toggle('hidden', !editing);
+      $('formSection').classList.toggle('ring-slate-200', !editing);
+      $('formSection').classList.toggle('ring-2', editing);
+      $('formSection').classList.toggle('ring-amber-300', editing);
     }
 
     function startEdit(id) {
@@ -410,34 +590,38 @@
       if (!t) return;
       form.description.value = t.description;
       form.amount.value = t.amount.toFixed(2);
+      form.date.value = t.date;
       form.type.value = t.type;
       form.category.value = t.category;
-      errorEl.classList.add('hidden');
+      $('formError').classList.add('hidden');
       setEditMode(id);
-      renderList();
-      formSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      renderList(getMonthTransactions());
+      $('formSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
       form.description.focus({ preventScroll: true });
     }
 
     function cancelEdit() {
       setEditMode(null);
       resetForm();
-      renderList();
+      renderList(getMonthTransactions());
     }
 
-    cancelEditBtn.addEventListener('click', cancelEdit);
+    $('cancelEditBtn').addEventListener('click', cancelEdit);
 
     form.addEventListener('submit', e => {
       e.preventDefault();
       const description = form.description.value.trim();
       const amount = parseFloat(form.amount.value);
+      const date = form.date.value;
 
       if (!description) return showError('Please enter a description.');
       if (!Number.isFinite(amount) || amount <= 0) return showError('Please enter an amount greater than 0.');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return showError('Please choose a date.');
 
       const data = {
         description,
         amount: Math.round(amount * 100) / 100,
+        date,
         type: form.type.value,
         category: form.category.value,
       };
@@ -449,20 +633,24 @@
         transactions.push({ id: Date.now(), ...data });
       }
 
+      // Jump to the transaction's month so the user sees the result
+      const [y, m] = date.split('-').map(Number);
+      selected = { y, m: m - 1 };
+
       resetForm();
-      form.description.focus();
       render();
     });
 
-    // ---- Delete with confirmation ----
-    const confirmDialog = document.getElementById('confirmDialog');
-    const confirmText = document.getElementById('confirmText');
+    // =========================================================
+    // Delete with confirmation
+    // =========================================================
+    const confirmDialog = $('confirmDialog');
 
     function requestDelete(id) {
       const t = findTx(id);
       if (!t) return;
       pendingDeleteId = id;
-      confirmText.innerHTML =
+      $('confirmText').innerHTML =
         `“${escapeHTML(t.description)}” (${currency.format(t.amount)}) will be permanently removed.`;
       confirmDialog.showModal();
     }
@@ -485,8 +673,10 @@
       if (e.target === confirmDialog) confirmDialog.close('cancel');
     });
 
-    // ---- Row actions (event delegation) ----
-    listEl.addEventListener('click', e => {
+    // =========================================================
+    // Row actions (event delegation)
+    // =========================================================
+    $('txList').addEventListener('click', e => {
       const btn = e.target.closest('button[data-action]');
       if (!btn) return;
       const id = Number(btn.dataset.id);
@@ -494,6 +684,10 @@
       if (btn.dataset.action === 'delete') requestDelete(id);
     });
 
+    // =========================================================
+    // Init
+    // =========================================================
+    $('date').value = defaultDateForSelected();
     render();
   </script>
 </body>
